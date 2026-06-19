@@ -1,9 +1,9 @@
 import express from "express";
-import { createReview } from "../controllers/reviewController.js";
-import { protect } from "../middleware/authMiddleware.js";
+import { getSellerReviews, getMyReviews, createReview } from "../controllers/reviewController.js";
+import { authMiddleware, requireRole } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
-
-router.post("/", protect, createReview);
-
+router.get("/seller/:sellerId", getSellerReviews);                       // public
+router.get("/my-reviews", authMiddleware, requireRole("buyer"), getMyReviews);
+router.post("/", authMiddleware, requireRole("buyer"), createReview);
 export default router;
