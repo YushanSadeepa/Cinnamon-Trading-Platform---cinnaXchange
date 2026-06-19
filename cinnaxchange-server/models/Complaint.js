@@ -1,36 +1,33 @@
 import mongoose from "mongoose";
 
-const notificationSchema = new mongoose.Schema(
+const complaintSchema = new mongoose.Schema(
   {
-    user: {
+    reporter: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
-    type: {
-      type: String,
-      enum: [
-        "bid_placed",        // Someone bid on your auction (seller)
-        "outbid",            // You were outbid (buyer)
-        "auction_won",       // You won an auction (buyer)
-        "auction_ended",     // Your auction ended (seller)
-        "meeting_required",  // Physical meeting needed (both)
-        "transaction_completed", // Seller confirmed completion (buyer)
-        "review_prompt",     // Prompt buyer to leave review
-        "verification_approved",
-        "verification_rejected",
-        "complaint_received",
-      ],
+    against: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
       required: true,
     },
-    title: { type: String, required: true },
-    message: { type: String, required: true },
-    read: { type: Boolean, default: false },
-    // Optional reference to related entity
-    refModel: { type: String, enum: ["Auction", "Product", "Review"] },
-    refId: { type: mongoose.Schema.Types.ObjectId },
+    auction: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Auction",
+    },
+    reason: { type: String, required: true },
+    description: { type: String },
+    status: {
+      type: String,
+      enum: ["open", "under_review", "resolved", "dismissed"],
+      default: "open",
+    },
+    resolution: { type: String },
+    resolvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    resolvedAt: { type: Date },
   },
   { timestamps: true }
 );
 
-export default mongoose.model("Notification", notificationSchema);
+export default mongoose.model("Complaint", complaintSchema);

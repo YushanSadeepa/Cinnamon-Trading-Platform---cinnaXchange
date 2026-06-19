@@ -6,152 +6,80 @@ import http from "http";
 import { Server } from "socket.io";
 
 import authRoutes from "./routes/authRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
+import productRoutes from "./routes/productRoutes.js";
+import auctionRoutes from "./routes/auctionRoutes.js";
+import bidRoutes from "./routes/bidRoutes.js";
+import reviewRoutes from "./routes/reviewRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import noCache from "./middleware/noCache.js";
+import registerAuctionHandlers from "./socket/auctionHandler.js";
 
 dotenv.config();
 
 const app = express();
 
 /**
- * =========================
  * MIDDLEWARE
- * =========================
  */
-
-app.use(
-  cors({
-    origin: "http://localhost:5173",
-    credentials: true,
-  })
-);
-
+app.use(cors({ origin: "http://localhost:5173", credentials: true }));
 app.use(express.json());
 app.use(noCache);
 
 /**
- * =========================
  * HTTP SERVER + SOCKET.IO
- * =========================
  */
-
 const server = http.createServer(app);
-
 const io = new Server(server, {
-  cors: {
-    origin: "http://localhost:5173",
-    methods: ["GET", "POST"],
-    credentials: true,
-  },
+  cors: { origin: "http://localhost:5173", methods: ["GET", "POST"], credentials: true },
 });
 
 /**
- * =========================
- * DATABASE CONNECTION
- * =========================
+ * DATABASE
  */
-
 mongoose
   .connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.error("MongoDB connection error:", err));
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch((err) => console.error("❌ MongoDB error:", err));
 
 /**
- * =========================
  * API ROUTES
- * =========================
  */
-
 app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/products", productRoutes);
+app.use("/api/auctions", auctionRoutes);
+app.use("/api/bids", bidRoutes);
+app.use("/api/reviews", reviewRoutes);
+app.use("/api/notifications", notificationRoutes);
 app.use("/api/admin", adminRoutes);
 
-/**
- * =========================
- * TEST ROUTE
- * =========================
- */
-
-app.get("/", (req, res) => {
-  res.send("CinnaXchange API Running");
-});
+app.get("/", (req, res) => res.send("CinnaXchange API Running"));
 
 /**
- * =========================
- * SOCKET.IO AUCTION SYSTEM
- * =========================
+ * SOCKET.IO
+ * Each user joins their personal room (user_<id>) on connect
+ * so targeted notifications can be pushed in real time.
  */
-
-let auctions = {};
-
 io.on("connection", (socket) => {
-  console.log("User connected:", socket.id);
+  console.log("🟢 Socket connected:", socket.id);
 
-  // JOIN AUCTION
-  socket.on("join_auction", (auctionId) => {
-    socket.join(auctionId);
-    console.log(`User ${socket.id} joined auction ${auctionId}`);
+  // User joins their personal notification room
+  socket.on("join_user_room", (userId) => {
+    socket.join(`user_${userId}`);
   });
 
-  // LEAVE AUCTION
-  socket.on("leave_auction", (auctionId) => {
-    socket.leave(auctionId);
-    console.log(`User ${socket.id} left auction ${auctionId}`);
-  });
-
-  // PLACE BID
-  socket.on("place_bid", ({ auctionId, user, amount }) => {
-    const current = auctions[auctionId];
-
-    if (!current) {
-      auctions[auctionId] = {
-        highestBid: amount,
-        bidder: user,
-      };
-    } else {
-      if (amount <= current.highestBid) {
-        socket.emit("bid_error", "Bid must be higher than current bid");
-        return;
-      }
-
-      auctions[auctionId] = {
-        highestBid: amount,
-        bidder: user,
-      };
-    }
-
-    io.to(auctionId).emit("bid_update", {
-      auctionId,
-      highestBid: auctions[auctionId].highestBid,
-      bidder: auctions[auctionId].bidder,
-    });
-  });
-
-  // GET CURRENT AUCTION STATUS
-  socket.on("get_auction_status", (auctionId) => {
-    const status = auctions[auctionId] || {
-      highestBid: 0,
-      bidder: null,
-    };
-
-    socket.emit("auction_status", {
-      auctionId,
-      ...status,
-    });
-  });
+  // Register auction-specific handlers
+  registerAuctionHandlers(io, socket);
 
   socket.on("disconnect", () => {
-    console.log("User disconnected:", socket.id);
+    console.log("🔴 Socket disconnected:", socket.id);
   });
 });
 
 /**
- * =========================
  * SERVER START
- * =========================
  */
-
 const PORT = process.env.PORT || 5000;
-
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
