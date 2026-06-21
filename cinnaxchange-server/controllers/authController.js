@@ -2,7 +2,7 @@ import User from "../models/User.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
-// REGISTER
+// POST /api/auth/register
 export const registerUser = async (req, res) => {
   try {
     const { fullName, email, password, role } = req.body;
@@ -18,19 +18,22 @@ export const registerUser = async (req, res) => {
       fullName,
       email,
       password: hashedPassword,
-      role,
+      role: role || "buyer",
     });
+
+    // Never return password in response
+    const { password: _pw, ...safeUser } = user.toObject();
 
     res.status(201).json({
       message: "User registered successfully",
-      user,
+      user: safeUser,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-// LOGIN
+// POST /api/auth/login
 export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -41,7 +44,6 @@ export const loginUser = async (req, res) => {
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
-
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
@@ -52,10 +54,12 @@ export const loginUser = async (req, res) => {
       { expiresIn: "7d" }
     );
 
+    const { password: _pw, ...safeUser } = user.toObject();
+
     res.json({
       message: "Login successful",
       token,
-      user,
+      user: safeUser,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

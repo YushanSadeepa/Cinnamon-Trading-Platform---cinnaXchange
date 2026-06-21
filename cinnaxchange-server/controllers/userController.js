@@ -66,11 +66,17 @@ export const submitVerification = async (req, res) => {
     }
 
     const files = req.files || {};
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const filePath = (field) =>
+      files[field]?.[0]?.filename
+        ? `${baseUrl}/uploads/kyc/${files[field][0].filename}`
+        : undefined;
+
     user.verification = {
       ...user.verification,
-      nicFront: files.nicFront?.[0]?.path,
-      nicBack: files.nicBack?.[0]?.path,
-      selfie: files.selfie?.[0]?.path,
+      nicFront: filePath("nicFront") || user.verification.nicFront,
+      nicBack: filePath("nicBack") || user.verification.nicBack,
+      selfie: filePath("selfie") || user.verification.selfie,
       status: "pending",
       submittedAt: new Date(),
     };

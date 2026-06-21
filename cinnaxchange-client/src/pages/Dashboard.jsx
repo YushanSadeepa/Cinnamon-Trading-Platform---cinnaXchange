@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import api from "../services/api";
 import { logout } from "../redux/authSlice";
+import NotificationBell from "../components/NotificationBell";
 
 export default function Dashboard() {
   const { user } = useSelector((state) => state.auth);
@@ -36,54 +37,52 @@ export default function Dashboard() {
 
   const loadDashboardData = async () => {
     try {
-      // Get seller products
-      const productsRes = await api.get("/products/my-products");
-
-      // Get trust score
       const trustRes = await api.get(`/users/trust/${user._id}`);
+      const trustScore = trustRes.data.trustScore || 0;
 
-      // Get user's purchases (for buyer)
-      const purchasesRes = await api.get("/purchases/my-purchases");
-
-      // Get user's bids (for buyer)
-      const bidsRes = await api.get("/bids/my-bids");
-
-      // Get user's won auctions (for buyer)
-      const wonAuctionsRes = await api.get("/auctions/won");
-
-      // Get total sales (for seller)
-      const salesRes = await api.get("/sales/my-sales");
-
-      // Admin stats (only if admin)
-      let adminStats = {};
-      if (role === "admin") {
-        const usersRes = await api.get("/admin/users");
-        const listingsRes = await api.get("/admin/listings");
-        const auctionsRes = await api.get("/admin/auctions");
-        const complaintsRes = await api.get("/admin/complaints");
-
-        adminStats = {
-          totalUsers: usersRes.data.length,
-          totalListings: listingsRes.data.length,
-          totalAuctions: auctionsRes.data.length,
-          totalComplaints: complaintsRes.data.length,
-        };
+      if (role === "buyer") {
+        const [bidsRes, wonRes] = await Promise.all([
+          api.get("/bids/my-bids"),
+          api.get("/auctions/won"),
+        ]);
+        setStats((prev) => ({
+          ...prev,
+          // Count auctions where buyer placed at least one bid as "purchased"
+          productsPurchased: wonRes.data.length || 0,
+          activeBids: bidsRes.data.filter((b) => b.isWinning && b.auction?.status === "active").length || 0,
+          wonAuctions: wonRes.data.length || 0,
+          trustScore,
+        }));
+      } else if (role === "seller") {
+        const [productsRes, auctionsRes, completedRes] = await Promise.all([
+          api.get("/products/my-products"),
+          api.get("/auctions/my-auctions"),
+          api.get("/auctions/completed-sales"),
+        ]);
+        const totalSales = completedRes.data.reduce((sum, a) => sum + (a.winningBid || 0), 0);
+        setStats((prev) => ({
+          ...prev,
+          activeListings: productsRes.data.filter((p) => p.status === "active").length || 0,
+          activeAuctions: auctionsRes.data.filter((a) => a.status === "active").length || 0,
+          totalSales,
+          trustScore,
+        }));
+      } else if (role === "admin") {
+        const [usersRes, listingsRes, auctionsRes, complaintsRes] = await Promise.all([
+          api.get("/admin/users"),
+          api.get("/admin/listings"),
+          api.get("/admin/auctions"),
+          api.get("/admin/complaints"),
+        ]);
+        setStats((prev) => ({
+          ...prev,
+          totalUsers: usersRes.data.length || 0,
+          totalListings: listingsRes.data.length || 0,
+          totalAuctions: auctionsRes.data.length || 0,
+          totalComplaints: complaintsRes.data.length || 0,
+          trustScore,
+        }));
       }
-
-      setStats({
-        // Buyer stats
-        productsPurchased: purchasesRes.data.length || 0,
-        activeBids: bidsRes.data.filter((bid) => bid.status === "active").length || 0,
-        wonAuctions: wonAuctionsRes.data.length || 0,
-        // Seller stats
-        activeListings: productsRes.data.filter((p) => p.isBuyNow && p.status === "active").length || 0,
-        activeAuctions: productsRes.data.filter((p) => p.isAuction && p.status === "active").length || 0,
-        totalSales: salesRes.data?.totalSales || 0,
-        // Common
-        trustScore: trustRes.data.trustScore || 0,
-        // Admin stats
-        ...adminStats,
-      });
     } catch (error) {
       console.error("Dashboard Error:", error);
     }
@@ -303,7 +302,7 @@ export default function Dashboard() {
             <span className="cx-nav-brand-name">CinnaXchange</span>
           </div>
 
-          <div className="cx-nav-right">
+          <div className="cx-nav-right"><NotificationBell />
             <div className="cx-nav-user-text">
               <div className="cx-nav-user-name">{user?.fullName}</div>
               <div className="cx-nav-user-role">{user?.role}</div>
@@ -353,7 +352,7 @@ export default function Dashboard() {
                     </Link>
                   </li>
                   <li>
-                    <Link to="/auction">
+                    <Link to="/auctions">
                       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                         <path d="m14 4 6 6" /><path d="m4 14 6 6" /><path d="m12.5 5.5-7 7 1 1 7-7z" /><path d="m18.5 11.5-7 7 1 1 7-7z" /><path d="M2 22l3-1 1-3" />
                       </svg>
@@ -361,11 +360,27 @@ export default function Dashboard() {
                     </Link>
                   </li>
                   <li>
-                    <Link to="/purchases">
+                    <Link to="/my-bids">
                       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                         <circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6" />
                       </svg>
-                      My purchases
+                      My bids
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/won-auctions">
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M8.21 13.89 7 23l5-3 5 3-1.21-9.12"/><circle cx="12" cy="8" r="6"/>
+                      </svg>
+                      Won auctions
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/my-reviews">
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="12 2 15.1 8.3 22 9.3 17 14.1 18.2 21 12 17.8 5.8 21 7 14.1 2 9.3 8.9 8.3"/>
+                      </svg>
+                      My reviews
                     </Link>
                   </li>
                 </ul>
@@ -385,11 +400,19 @@ export default function Dashboard() {
                     </Link>
                   </li>
                   <li>
-                    <Link to="/create-product">
+                    <Link to="/create-listing">
                       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                         <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
                       </svg>
                       Create product
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/create-auction">
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="m14 4 6 6"/><path d="m4 14 6 6"/><path d="m12.5 5.5-7 7 1 1 7-7z"/>
+                      </svg>
+                      Create auction
                     </Link>
                   </li>
                   <li>
@@ -398,6 +421,38 @@ export default function Dashboard() {
                         <path d="m14 4 6 6" /><path d="m4 14 6 6" /><path d="m12.5 5.5-7 7 1 1 7-7z" /><path d="m18.5 11.5-7 7 1 1 7-7z" />
                       </svg>
                       My auctions
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/awaiting-meetings">
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                      </svg>
+                      Awaiting meetings
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/completed-sales">
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                      Completed sales
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/trust-score">
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 2 4 6v6c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6z"/>
+                      </svg>
+                      Trust score
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/kyc">
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                      </svg>
+                      KYC verification
                     </Link>
                   </li>
                 </ul>
@@ -409,11 +464,43 @@ export default function Dashboard() {
                 <p className="cx-nav-section-label">Administration</p>
                 <ul>
                   <li>
-                    <Link to="/admin">
+                    <Link to="/admin/users">
                       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 2 4 6v6c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6z" />
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
                       </svg>
-                      Admin dashboard
+                      Users
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/admin/listings">
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3h-4l-4 4M12 3v4"/>
+                      </svg>
+                      Listings
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/admin/auctions">
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="m14 4 6 6"/><path d="m4 14 6 6"/><path d="m12.5 5.5-7 7 1 1 7-7z"/>
+                      </svg>
+                      Auctions
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/admin/complaints">
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                      </svg>
+                      Complaints
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/admin/verification">
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 2 4 6v6c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6z"/>
+                      </svg>
+                      Verifications
                     </Link>
                   </li>
                 </ul>
@@ -422,6 +509,14 @@ export default function Dashboard() {
 
             <p className="cx-nav-section-label">Account</p>
             <ul>
+              <li>
+                <Link to="/profile">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+                  </svg>
+                  My profile
+                </Link>
+              </li>
               <li>
                 <Link to="/ratings">
                   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -444,7 +539,7 @@ export default function Dashboard() {
               </div>
 
               {role === "seller" && (
-                <Link to="/create-product" className="cx-create-btn">
+                <Link to="/create-listing" className="cx-create-btn">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
                   </svg>

@@ -3,9 +3,10 @@ import Product from "../models/Product.js";
 // GET /api/products — public marketplace listing
 export const getProducts = async (req, res) => {
   try {
-    const { grade, cinnamonType, minPrice, maxPrice, search } = req.query;
+    const { grade, cinnamonType, minPrice, maxPrice, search, sellerId } = req.query;
     const filter = { status: "active" };
 
+    if (sellerId) filter.seller = sellerId;
     if (grade) filter.grade = grade;
     if (cinnamonType) filter.cinnamonType = new RegExp(cinnamonType, "i");
     if (search) filter.title = new RegExp(search, "i");
@@ -69,8 +70,9 @@ export const createProduct = async (req, res) => {
       isAuction,
     } = req.body;
 
-    // images: multer will populate req.files
-    const images = req.files ? req.files.map((f) => f.path) : [];
+    // images: multer will populate req.files — build full URL for client access
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const images = req.files ? req.files.map((f) => `${baseUrl}/uploads/products/${f.filename}`) : [];
 
     const product = await Product.create({
       seller: req.user.id,
@@ -106,7 +108,8 @@ export const updateProduct = async (req, res) => {
 
     const updates = { ...req.body };
     if (req.files && req.files.length > 0) {
-      updates.images = req.files.map((f) => f.path);
+      const baseUrl = `${req.protocol}://${req.get("host")}`;
+      updates.images = req.files.map((f) => `${baseUrl}/uploads/products/${f.filename}`);
     }
 
     Object.assign(product, updates);

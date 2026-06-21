@@ -3,6 +3,8 @@ import dotenv from "dotenv";
 import mongoose from "mongoose";
 import cors from "cors";
 import http from "http";
+import path from "path";
+import { fileURLToPath } from "url";
 import { Server } from "socket.io";
 
 import authRoutes from "./routes/authRoutes.js";
@@ -15,10 +17,15 @@ import notificationRoutes from "./routes/notificationRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import noCache from "./middleware/noCache.js";
 import registerAuctionHandlers from "./socket/auctionHandler.js";
+import { startAuctionScheduler } from "./utils/auctionScheduler.js";
 
 dotenv.config();
 
 const app = express();
+
+// ESM-compatible __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * MIDDLEWARE
@@ -26,6 +33,10 @@ const app = express();
 app.use(cors({ origin: "http://localhost:5173", credentials: true }));
 app.use(express.json());
 app.use(noCache);
+
+// Serve uploaded files as static assets
+// e.g. http://localhost:5000/uploads/products/filename.jpg
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 /**
  * HTTP SERVER + SOCKET.IO
@@ -40,7 +51,10 @@ const io = new Server(server, {
  */
 mongoose
   .connect(process.env.MONGO_URI)
-  .then(() => console.log("✅ MongoDB connected"))
+  .then(() => {
+    console.log("✅ MongoDB connected");
+    startAuctionScheduler();
+  })
   .catch((err) => console.error("❌ MongoDB error:", err));
 
 /**

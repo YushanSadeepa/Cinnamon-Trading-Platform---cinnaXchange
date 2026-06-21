@@ -5,21 +5,21 @@ const api = axios.create({
   withCredentials: true,
 });
 
+// Attach JWT to every request from localStorage
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
+// Force logout + hard redirect on 401 (expired / invalid token)
 api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
-      // .replace() (not .href) so this history entry is discarded rather
-      // than pushed -- pressing Back afterwards can't return to a page
-      // that depended on the now-invalid token.
+      // .replace() discards the current history entry so Back can't return here
       window.location.replace("/login");
     }
     return Promise.reject(err);

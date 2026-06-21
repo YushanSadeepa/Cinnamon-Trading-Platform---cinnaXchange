@@ -4,9 +4,7 @@ const user = localStorage.getItem("user")
   ? JSON.parse(localStorage.getItem("user"))
   : null;
 
-const token = localStorage.getItem("token")
-  ? localStorage.getItem("token")
-  : null;
+const token = localStorage.getItem("token") || null;
 
 const initialState = {
   user,
@@ -34,6 +32,7 @@ const authSlice = createSlice({
 
       localStorage.removeItem("user");
       localStorage.removeItem("token");
+      sessionStorage.clear();
     },
   },
 });
